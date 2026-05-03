@@ -88,7 +88,7 @@ processed and a corresponding `<basename>_results.txt` is written beside it.
 
 ## GitHub repository
 
-<https://github.com/ZaidenxThiha/PPA-Power-Quality-Waveform-Analyser>
+<https://github.com/PyaeBhoneAung-Ozone/Power-Quality-Waveform-Analyser>
 
 ---
 
