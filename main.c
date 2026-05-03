@@ -131,6 +131,14 @@ int main(int argc, char *argv[])
         return 0;
     }
 
+    /* Input validation: single-file argument must end in .csv */
+    size_t plen = strlen(path);
+    if (plen < 4 || strcmp(path + plen - 4, ".csv") != 0) {
+        fprintf(stderr, "Error: '%s' is not a .csv file\n", path);
+        print_usage(argv[0]);
+        return 1;
+    }
+
     /* Single-file mode */
     return run_single_file(path);
 }
