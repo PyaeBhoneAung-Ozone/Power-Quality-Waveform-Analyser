@@ -6,8 +6,15 @@
 #include <string.h>
 
 /* ── is_directory ────────────────────────────────────────────────────────── */
-/* Attempt to open the path as a directory; return 1 if it succeeds.          */
-/* This avoids pulling in <sys/stat.h> for a simple path-type check.          */
+#ifdef _WIN32
+#include <windows.h>
+static int is_directory(const char *path)
+{
+    DWORD attrs = GetFileAttributesA(path);
+    return (attrs != INVALID_FILE_ATTRIBUTES &&
+            (attrs & FILE_ATTRIBUTE_DIRECTORY));
+}
+#else
 #include <dirent.h>
 static int is_directory(const char *path)
 {
@@ -15,6 +22,7 @@ static int is_directory(const char *path)
     if (d) { closedir(d); return 1; }
     return 0;
 }
+#endif
 
 /* ── print_usage ─────────────────────────────────────────────────────────── */
 static void print_usage(const char *prog)

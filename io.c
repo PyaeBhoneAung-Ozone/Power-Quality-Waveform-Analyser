@@ -5,8 +5,12 @@
 #include <string.h>
 #include <math.h>
 
-/* POSIX directory traversal — available on Linux, macOS, and WSL */
+/* Directory traversal — POSIX on Mac/Linux, Win32 API on Windows */
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <dirent.h>
+#endif
 
 /* ── Internal helpers ────────────────────────────────────────────────────── */
 
@@ -276,72 +280,106 @@ int write_results(const char           *out_path,
     return 0;
 }
 
+/* ── process_one ─────────────────────────────────────────────────────────── */
+/* Shared logic: analyse in_path, write report to out_path. Returns 1 on success. */
+static int process_one(const char *in_path, const char *out_path)
+{
+    int count = 0;
+    WaveformSample *samples = load_csv(in_path, &count);
+    if (!samples || count == 0) {
+        fprintf(stderr, "  Skipped (load failed)\n");
+        free(samples);
+        return 0;
+    }
+
+    double *va = malloc((size_t)count * sizeof(double));
+    double *vb = malloc((size_t)count * sizeof(double));
+    double *vc = malloc((size_t)count * sizeof(double));
+
+    if (!va || !vb || !vc) {
+        fprintf(stderr, "  Skipped (malloc failed)\n");
+        free(va); free(vb); free(vc);
+        free(samples);
+        return 0;
+    }
+
+    extract_phase(samples, count, 0, va);
+    extract_phase(samples, count, 1, vb);
+    extract_phase(samples, count, 2, vc);
+
+    PhaseResult pa, pb, pc;
+    analyse_phase(va, count, &pa);
+    analyse_phase(vb, count, &pb);
+    analyse_phase(vc, count, &pc);
+
+    int rc = write_results(out_path, samples, count, &pa, &pb, &pc);
+    if (rc == 0)
+        printf("  Report written: %s\n", out_path);
+
+    free(va); free(vb); free(vc);
+    free(samples);
+    return rc == 0 ? 1 : 0;
+}
+
 /* ── process_directory ───────────────────────────────────────────────────── */
 int process_directory(const char *dirpath)
 {
+    int processed = 0;
+
+#ifdef _WIN32
+    char pattern[1024];
+    snprintf(pattern, sizeof(pattern), "%s\\*.csv", dirpath);
+
+    WIN32_FIND_DATAA fd;
+    HANDLE hFind = FindFirstFileA(pattern, &fd);
+    if (hFind == INVALID_HANDLE_VALUE) {
+        fprintf(stderr, "Error: cannot open directory '%s'\n", dirpath);
+        return -1;
+    }
+
+    do {
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+
+        char in_path[1024];
+        snprintf(in_path, sizeof(in_path), "%s\\%s", dirpath, fd.cFileName);
+
+        char out_path[1024];
+        size_t base_len = strlen(in_path) - 4;
+        memcpy(out_path, in_path, base_len);
+        strcpy(out_path + base_len, "_results.txt");
+
+        printf("Processing: %s\n", in_path);
+        processed += process_one(in_path, out_path);
+
+    } while (FindNextFileA(hFind, &fd));
+
+    FindClose(hFind);
+
+#else
     DIR *dir = opendir(dirpath);
     if (!dir) {
         fprintf(stderr, "Error: cannot open directory '%s'\n", dirpath);
         return -1;
     }
 
-    int processed = 0;
     struct dirent *entry;
-
     while ((entry = readdir(dir)) != NULL) {
         if (!ends_with(entry->d_name, ".csv")) continue;
 
-        /* Build full input path */
         char in_path[1024];
         snprintf(in_path, sizeof(in_path), "%s/%s", dirpath, entry->d_name);
 
-        /* Build output path: replace .csv with _results.txt */
         char out_path[1024];
-        size_t base_len = strlen(in_path) - 4;   /* strip ".csv" */
+        size_t base_len = strlen(in_path) - 4;
         memcpy(out_path, in_path, base_len);
         strcpy(out_path + base_len, "_results.txt");
 
         printf("Processing: %s\n", in_path);
-
-        int count = 0;
-        WaveformSample *samples = load_csv(in_path, &count);
-        if (!samples || count == 0) {
-            fprintf(stderr, "  Skipped (load failed)\n");
-            free(samples);
-            continue;
-        }
-
-        /* Allocate per-phase voltage buffers */
-        double *va = malloc((size_t)count * sizeof(double));
-        double *vb = malloc((size_t)count * sizeof(double));
-        double *vc = malloc((size_t)count * sizeof(double));
-
-        if (!va || !vb || !vc) {
-            fprintf(stderr, "  Skipped (malloc failed)\n");
-            free(va); free(vb); free(vc);
-            free(samples);
-            continue;
-        }
-
-        extract_phase(samples, count, 0, va);
-        extract_phase(samples, count, 1, vb);
-        extract_phase(samples, count, 2, vc);
-
-        PhaseResult pa, pb, pc;
-        analyse_phase(va, count, &pa);
-        analyse_phase(vb, count, &pb);
-        analyse_phase(vc, count, &pc);
-
-        int rc = write_results(out_path, samples, count, &pa, &pb, &pc);
-        if (rc == 0) {
-            printf("  Report written: %s\n", out_path);
-            processed++;
-        }
-
-        free(va); free(vb); free(vc);
-        free(samples);
+        processed += process_one(in_path, out_path);
     }
 
     closedir(dir);
+#endif
+
     return processed;
 }
