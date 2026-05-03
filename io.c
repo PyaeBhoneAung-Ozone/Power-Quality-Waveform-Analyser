@@ -263,9 +263,9 @@ int write_results(const char           *out_path,
     fprintf(fp, "\n");
 
     /* THD assessment */
-    const char *thd_assessment = "Clean supply (<5%%)";
-    if (thd_max >= 8.0)       thd_assessment = "EXCESSIVE (>8%%) — overheating risk";
-    else if (thd_max >= 5.0)  thd_assessment = "Elevated (5-8%%) — monitor";
+    const char *thd_assessment = "Clean supply (<5%)";
+    if (thd_max >= 8.0)       thd_assessment = "EXCESSIVE (>8%) -- overheating risk";
+    else if (thd_max >= 5.0)  thd_assessment = "Elevated (5-8%) -- monitor";
     fprintf(fp, "  THD assessment : %s\n\n", thd_assessment);
 
     fprintf(fp, "=============================================================\n");
